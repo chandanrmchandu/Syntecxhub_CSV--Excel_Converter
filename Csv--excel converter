@@ -1,0 +1,60 @@
+import argparse
+import logging
+import os
+import pandas as pd
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+def clean_and_normalize_data(df: pd.DataFrame) -> pd.DataFrame:
+    logging.info("Starting data normalization...")
+    df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
+    logging.info(f"Normalized column headers: {list(df.columns)}")
+
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            df[col] = df[col].fillna("Unknown")
+        else:
+            df[col] = df[col].fillna(0)
+
+    date_keywords = ['date', 'time', 'timestamp', 'created', 'updated']
+    for col in df.columns:
+        if any(keyword in col for keyword in date_keywords):
+            try:
+                df[col] = pd.to_datetime(df[col], errors='ignore')
+                logging.info(f"Parsed column '{col}' as datetime where applicable.")
+            except Exception as e:
+                logging.warning(f"Could not parse dates in column '{col}': {e}")
+    return df
+
+def convert_csv_to_excel(input_path: str, output_path: str):
+    if not os.path.exists(input_path):
+        logging.error(f"Input file not found: '{input_path}'")
+        return
+
+    try:
+        logging.info(f"Reading CSV file from: '{input_path}'")
+        df = pd.read_csv(input_path)
+    except Exception as e:
+        logging.error(f"Failed to read CSV file: {e}")
+        return
+
+    processed_df = clean_and_normalize_data(df)
+
+    try:
+        logging.info(f"Exporting processed data to Excel: '{output_path}'")
+        processed_df.to_excel(output_path, index=False, engine='openpyxl')
+        logging.info("Conversion completed successfully!")
+    except Exception as e:
+        logging.error(f"Failed to export Excel file: {e}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="CLI Utility to convert, clean, and normalize CSV files to Excel (.xlsx)."
+    )
+    parser.add_argument("-i", "--input", required=True, help="Path to the input CSV file.")
+    parser.add_argument("-o", "--output", required=True, help="Target output path for the .xlsx file.")
+    args = parser.parse_args()
+    convert_csv_to_excel(args.input, args.output)
